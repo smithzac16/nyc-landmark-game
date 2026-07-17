@@ -58,7 +58,9 @@
   .fact{font-size:13.5px; color:var(--muted); text-align:center; margin:6px 0 14px; line-height:1.45;}
   .panel .btn{width:100%; padding:17px; font-size:18px;}
 
-  .mapwrap{position:relative; flex:1; display:flex; min-height:0;}
+  .mapwrap{position:relative; flex:1; display:flex; min-height:0; overflow:hidden;}
+  .panel{visibility:hidden; pointer-events:none;}
+  .panel.show{visibility:visible; pointer-events:auto;}
 
   .endlist{width:100%; max-width:360px; text-align:left; background:var(--navy2); border-radius:14px; padding:14px 18px;}
   .endrow{display:flex; justify-content:space-between; padding:7px 0; border-bottom:1px solid #26375e; font-size:14.5px;}
