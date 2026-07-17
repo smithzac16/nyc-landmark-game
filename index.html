@@ -192,6 +192,7 @@ function fmtDist(m){return m<1000?Math.round(m)+" m":(m/1000).toFixed(2)+" km";}
 function emojiFor(p){return p>=900?"🟩":p>=600?"🟨":p>=250?"🟧":"🟥";}
 const LS={get(k,d){try{return JSON.parse(localStorage.getItem("nylg_"+k))??d}catch(e){return d}},set(k,v){localStorage.setItem("nylg_"+k,JSON.stringify(v))}};
 const EATS=new Set(["Restaurant","Bar"]);
+function locOf(t){return t.g&&t.g!==t.b?t.g+", "+t.b:t.b;}
 
 // ---------- State ----------
 let map, guessMarker=null, actualMarker=null, line=null;
@@ -240,7 +241,7 @@ function renderRound(){
   const sub=t.c+(t.s&&t.s!==t.c?" · "+t.s:"");
   document.getElementById("targetSub").textContent=(EATS.has(t.c)?"🍴 ":"")+sub;
   const hintEl=document.getElementById("targetHint");
-  if(cur===2){hintEl.textContent="💡 Look in "+t.g+", "+t.b; hintEl.classList.remove("hidden");}
+  if(cur===2){hintEl.textContent="💡 Look in "+locOf(t); hintEl.classList.remove("hidden");}
   else if(cur===3){hintEl.textContent="💡 Somewhere in "+t.b; hintEl.classList.remove("hidden");}
   else hintEl.classList.add("hidden");
   document.getElementById("score").textContent=total;
@@ -266,7 +267,7 @@ function confirmGuess(){
   map.fitBounds(L.latLngBounds([g,a]).pad(0.35));
   document.getElementById("pDist").textContent=fmtDist(d);
   document.getElementById("pPts").textContent="+"+pts;
-  const where="📍 "+(t.a?t.a+" · ":"")+t.g+", "+t.b;
+  const where="📍 "+(t.a?t.a+" · ":"")+locOf(t);
   document.getElementById("pFact").textContent=t.f?t.f+" "+where:where;
   document.getElementById("nextBtn").textContent=cur===4?"See results":"Next round";
   document.getElementById("score").textContent=total;
