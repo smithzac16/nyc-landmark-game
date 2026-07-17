@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>NYC Landmark Game</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+  :root{
+    --navy:#101c33; --navy2:#1a2b4d; --yellow:#ffc300; --green:#27c46b;
+    --orange:#ff8c42; --red:#ff5a5f; --ink:#eef2fa; --muted:#93a1bd;
+  }
+  *{box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent;}
+  html,body{height:100%; overflow:hidden;}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--navy); color:var(--ink); display:flex; flex-direction:column;}
+
+  header{display:flex; align-items:center; justify-content:space-between; padding:10px 16px; background:var(--navy); border-bottom:1px solid #223258; z-index:1200;}
+  header h1{font-size:17px; letter-spacing:.5px;}
+  header h1 span{color:var(--yellow);}
+  .streak{font-size:14px; color:var(--muted);}
+  .streak b{color:var(--yellow);}
+
+  .screen{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px; padding:24px; text-align:center;}
+  .hidden{display:none !important;}
+  .logo{font-size:56px; line-height:1;}
+  .tagline{color:var(--muted); max-width:340px; font-size:15px; line-height:1.5;}
+  .btn{border:none; border-radius:12px; padding:14px 30px; font-size:16px; font-weight:700; cursor:pointer; transition:transform .08s;}
+  .btn:active{transform:scale(.96);}
+  .btn-primary{background:var(--yellow); color:#1a1a1a;}
+  .btn-ghost{background:transparent; color:var(--muted); border:1px solid #33456f;}
+  .btn:disabled{opacity:.4; cursor:default;}
+
+  #game{flex:1; display:flex; flex-direction:column; min-height:0;}
+  .topbar{display:flex; align-items:center; justify-content:space-between; padding:8px 16px; background:var(--navy);}
+  .dots{display:flex; gap:6px;}
+  .dot{width:10px; height:10px; border-radius:50%; background:#2c3d63;}
+  .dot.cur{background:var(--yellow);}
+  .dot.g1{background:var(--green);} .dot.g2{background:var(--yellow);} .dot.g3{background:var(--orange);} .dot.g4{background:var(--red);}
+  .scorebox{font-size:14px; color:var(--muted);}
+  .scorebox b{color:var(--ink); font-size:16px;}
+
+  .prompt{padding:10px 16px 12px; background:var(--navy); border-bottom:1px solid #223258;}
+  .prompt .find{font-size:12px; text-transform:uppercase; letter-spacing:1.5px; color:var(--muted);}
+  .prompt .name{font-size:21px; font-weight:800; margin-top:2px;}
+  .badge{display:inline-block; margin-left:8px; font-size:11px; font-weight:700; background:var(--yellow); color:#1a1a1a; border-radius:20px; padding:2px 9px; vertical-align:middle;}
+
+  #map{flex:1; min-height:0; background:#a9d1f7;}
+  .leaflet-container{font:inherit;}
+
+  .actionbar{padding:12px 16px calc(12px + env(safe-area-inset-bottom)); background:var(--navy); border-top:1px solid #223258;}
+  .actionbar .btn{width:100%; padding:17px; font-size:18px;}
+
+  .panel{position:absolute; left:0; right:0; bottom:0; z-index:1100; background:var(--navy2); border-radius:18px 18px 0 0; padding:18px 20px 22px; box-shadow:0 -8px 30px rgba(0,0,0,.5); transform:translateY(110%); transition:transform .3s ease;}
+  .panel.show{transform:translateY(0);}
+  .panel .row{display:flex; justify-content:space-around; align-items:center; margin-bottom:8px;}
+  .stat .val{font-size:26px; font-weight:800;}
+  .stat .lbl{font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:1px;}
+  .fact{font-size:13.5px; color:var(--muted); text-align:center; margin:6px 0 14px; line-height:1.45;}
+  .panel .btn{width:100%; padding:17px; font-size:18px;}
+
+  .mapwrap{position:relative; flex:1; display:flex; min-height:0;}
+
+  .endlist{width:100%; max-width:360px; text-align:left; background:var(--navy2); border-radius:14px; padding:14px 18px;}
+  .endrow{display:flex; justify-content:space-between; padding:7px 0; border-bottom:1px solid #26375e; font-size:14.5px;}
+  .endrow:last-child{border-bottom:none;}
+  .endrow .pts{font-weight:700;}
+  .bigscore{font-size:44px; font-weight:800; color:var(--yellow);}
+  .toast{position:fixed; bottom:30px; left:50%; transform:translateX(-50%); background:var(--green); color:#fff; padding:10px 22px; border-radius:24px; font-weight:600; z-index:2000; opacity:0; transition:opacity .3s;}
+  .toast.show{opacity:1;}
+
+  .pin-guess{filter:hue-rotate(150deg);}
+  .help{background:none; border:1px solid #33456f; color:var(--muted); border-radius:50%; width:28px; height:28px; font-weight:700; cursor:pointer;}
+  .modal{position:fixed; inset:0; background:rgba(6,12,26,.8); z-index:1500; display:flex; align-items:center; justify-content:center; padding:24px;}
+  .modal .card{background:var(--navy2); border-radius:16px; padding:24px; max-width:380px; line-height:1.55; font-size:14.5px;}
+  .modal h2{margin-bottom:10px; font-size:18px;}
+  .modal p{margin-bottom:8px; color:var(--muted);}
+</style>
+</head>
+<body>
+<header>
+  <h1>NYC <span>Landmark</span> Game</h1>
+  <div style="display:flex;gap:12px;align-items:center">
+    <div class="streak">🔥 <b id="streak">0</b></div>
+    <button class="help" id="helpBtn">?</button>
+  </div>
+</header>
+
+<div class="screen" id="intro">
+  <div class="logo">🗽</div>
+  <h2 style="font-size:24px">How well do you know New York?</h2>
+  <p class="tagline">One game a day. Five landmarks. Tap the map where you think each one is — the closer your pin, the more points you score.</p>
+  <button class="btn btn-primary" id="playBtn">Play today's game</button>
+  <button class="btn btn-ghost" id="practiceBtn">Practice (unlimited)</button>
+</div>
+
+<div id="game" class="hidden">
+  <div class="topbar">
+    <div class="dots" id="dots"></div>
+    <div class="scorebox">Score <b id="score">0</b></div>
+  </div>
+  <div class="prompt">
+    <div class="find" id="roundLbl">Round 1 of 5 — find:</div>
+    <div class="name" id="targetName"></div>
+  </div>
+  <div class="mapwrap">
+    <div id="map"></div>
+    <div class="panel" id="panel">
+      <div class="row">
+        <div class="stat"><div class="val" id="pDist">–</div><div class="lbl">away</div></div>
+        <div class="stat"><div class="val" id="pPts" style="color:var(--yellow)">–</div><div class="lbl">points</div></div>
+      </div>
+      <div class="fact" id="pFact"></div>
+      <button class="btn btn-primary" id="nextBtn">Next</button>
+    </div>
+  </div>
+  <div class="actionbar" id="actionbar"><button class="btn btn-primary" id="confirmBtn" disabled>Tap the map to place your pin</button></div>
+</div>
+
+<div class="screen hidden" id="end">
+  <div class="logo" id="endEmoji">🎉</div>
+  <div class="bigscore" id="finalScore">0</div>
+  <div style="color:var(--muted)" id="endSub">out of 5000</div>
+  <div class="endlist" id="endList"></div>
+  <button class="btn btn-primary" id="shareBtn">Share result</button>
+  <button class="btn btn-ghost" id="againBtn">Practice round</button>
+</div>
+
+<div class="modal hidden" id="helpModal">
+  <div class="card">
+    <h2>How to play</h2>
+    <p>Each round names an NYC landmark. Tap the (label-free!) map where you think it is, then hit <b>Confirm</b>.</p>
+    <p>Within ~75 m earns the full <b>1000 points</b>; points fall off the farther away you are. 5 rounds, 5000 max.</p>
+    <p>Everyone gets the same 5 landmarks each day. Come back daily to build your 🔥 streak.</p>
+    <p>🍴 badges mark local bars &amp; eats worth knowing.</p>
+    <button class="btn btn-primary" style="width:100%;margin-top:10px" onclick="document.getElementById('helpModal').classList.add('hidden')">Got it</button>
+  </div>
+</div>
+
+<div class="toast" id="toast">Copied!</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+// ---------- Landmark database ----------
+// {n:name, la:lat, lo:lng, f:fact, s:local spot (bar/restaurant)}
+const LANDMARKS=[
+ {n:"Statue of Liberty",la:40.6892,lo:-74.0445,f:"A gift from France, dedicated in 1886 on Liberty Island."},
+ {n:"Empire State Building",la:40.74844,lo:-73.98565,f:"102 stories tall — the world's tallest building from 1931 to 1970."},
+ {n:"Times Square",la:40.758,lo:-73.9855,f:"Named after The New York Times, which moved here in 1904."},
+ {n:"Bethesda Fountain, Central Park",la:40.774,lo:-73.9709,f:"The Angel of the Waters statue was the first major NYC artwork commissioned from a woman."},
+ {n:"Brooklyn Bridge",la:40.7061,lo:-73.9969,f:"Opened in 1883 — the world's first steel-wire suspension bridge."},
+ {n:"One World Trade Center",la:40.71274,lo:-74.01339,f:"At 1,776 feet, it's the tallest building in the Western Hemisphere."},
+ {n:"Grand Central Terminal",la:40.75273,lo:-73.97723,f:"Its ceiling mural of the zodiac is famously painted backwards."},
+ {n:"Rockefeller Center",la:40.75874,lo:-73.97867,f:"Home of the famous Christmas tree tradition since 1933."},
+ {n:"Chrysler Building",la:40.75155,lo:-73.97552,f:"Its Art Deco spire was secretly assembled inside the building, then hoisted in 90 minutes."},
+ {n:"Flatiron Building",la:40.74106,lo:-73.98964,f:"Just 6.5 feet wide at its narrow end."},
+ {n:"The Met (Metropolitan Museum of Art)",la:40.77944,lo:-73.96324,f:"The largest art museum in the Americas."},
+ {n:"American Museum of Natural History",la:40.78132,lo:-73.97399,f:"Home to a 94-foot blue whale model and a 34-ton meteorite."},
+ {n:"Guggenheim Museum",la:40.78297,lo:-73.95899,f:"Frank Lloyd Wright's spiral — his last major work."},
+ {n:"MoMA",la:40.76143,lo:-73.97764,f:"Van Gogh's Starry Night lives here."},
+ {n:"Washington Square Arch",la:40.73083,lo:-73.99733,f:"Built in 1892 to honor George Washington's centennial inauguration."},
+ {n:"Charging Bull",la:40.70561,lo:-74.0134,f:"Guerrilla-installed overnight in 1989 by artist Arturo Di Modica."},
+ {n:"The High Line",la:40.73988,lo:-74.008,f:"An elevated freight rail line turned park, opened in 2009."},
+ {n:"Madison Square Garden",la:40.75054,lo:-73.99349,f:"Sits directly on top of Penn Station."},
+ {n:"Radio City Music Hall",la:40.75998,lo:-73.9799,f:"Home of the Rockettes since 1932."},
+ {n:"Apollo Theater",la:40.80982,lo:-73.95004,f:"Ella Fitzgerald won Amateur Night here at 17."},
+ {n:"Columbia University",la:40.80754,lo:-73.96257,f:"Founded in 1754 as King's College."},
+ {n:"NYU (Washington Square)",la:40.72951,lo:-73.99716,f:"The torch on NYU's logo comes from the Statue of Liberty."},
+ {n:"Katz's Delicatessen",la:40.72224,lo:-73.98743,s:1,f:"Slinging pastrami on the Lower East Side since 1888."},
+ {n:"St. Patrick's Cathedral",la:40.75846,lo:-73.97614,f:"The largest Gothic Revival Catholic cathedral in North America."},
+ {n:"Bryant Park",la:40.75362,lo:-73.98327,f:"Sits on top of the NY Public Library's underground stacks."},
+ {n:"Union Square",la:40.73587,lo:-73.99067,f:"Hosts NYC's most famous greenmarket, running since 1976."},
+ {n:"Lincoln Center",la:40.77245,lo:-73.98347,f:"The world's largest performing-arts complex."},
+ {n:"Carnegie Hall",la:40.7651,lo:-73.97996,f:"How do you get here? Practice, practice, practice."},
+ {n:"Chinatown (Canal Street)",la:40.71781,lo:-73.99801,f:"One of the oldest Chinese enclaves outside Asia."},
+ {n:"Stonewall Inn",la:40.7338,lo:-74.0022,s:1,f:"Birthplace of the modern LGBTQ+ rights movement, 1969."},
+ {n:"Chelsea Market",la:40.74246,lo:-74.0061,s:1,f:"The Oreo was invented in this former Nabisco factory."},
+ {n:"The Vessel, Hudson Yards",la:40.7538,lo:-74.00219,f:"154 interconnecting flights of stairs, 2,500 steps."},
+ {n:"The Oculus",la:40.71156,lo:-74.01115,f:"Designed by Santiago Calatrava to resemble a dove in flight."},
+ {n:"Trinity Church",la:40.70808,lo:-74.01201,f:"Alexander Hamilton is buried in its churchyard."},
+ {n:"Grant's Tomb",la:40.81339,lo:-73.96319,f:"The largest mausoleum in North America."},
+ {n:"The Cloisters",la:40.86489,lo:-73.93169,f:"Medieval European art in a building assembled from actual French monasteries."},
+ {n:"Roosevelt Island Tramway",la:40.76153,lo:-73.96417,f:"One of the only commuter aerial tramways in North America."},
+ {n:"Staten Island Ferry (Whitehall)",la:40.70131,lo:-74.01319,f:"Free rides past the Statue of Liberty, 24/7, since 1817."},
+ {n:"Columbus Circle",la:40.76807,lo:-73.9819,f:"Official point from which all distances to NYC are measured."},
+ {n:"Strawberry Fields",la:40.77565,lo:-73.97457,f:"Central Park's memorial to John Lennon, across from the Dakota."},
+ {n:"New York Stock Exchange",la:40.7069,lo:-74.01113,f:"Founded under a buttonwood tree in 1792."},
+ {n:"Little Island",la:40.74202,lo:-74.01015,f:"A park floating on 132 concrete 'tulips' in the Hudson."},
+ {n:"Ellis Island",la:40.6995,lo:-74.03962,f:"Gateway for over 12 million immigrants, 1892–1954."},
+ {n:"Governors Island",la:40.68946,lo:-74.01671,f:"Cars are banned — it's all bikes and hammocks."},
+ {n:"Coney Island (Luna Park)",la:40.57438,lo:-73.9784,f:"The 1927 Cyclone roller coaster still runs today."},
+ {n:"Barclays Center",la:40.68265,lo:-73.97469,f:"Home of the Brooklyn Nets and NY Liberty."},
+ {n:"Grand Army Plaza, Brooklyn",la:40.67382,lo:-73.97036,f:"Its arch honors Union soldiers of the Civil War."},
+ {n:"DUMBO",la:40.70337,lo:-73.98905,f:"Down Under the Manhattan Bridge Overpass — one of NYC's most photographed spots."},
+ {n:"Williamsburg Bridge",la:40.7134,lo:-73.9725,f:"When it opened in 1903 it was the longest suspension bridge on Earth."},
+ {n:"Peter Luger Steak House",la:40.70987,lo:-73.96246,s:1,f:"Cash-preferred porterhouse legend since 1887."},
+ {n:"Brooklyn Museum",la:40.67145,lo:-73.96387,f:"NYC's second-largest museum."},
+ {n:"Citi Field",la:40.75705,lo:-73.84582,f:"Home of the Mets; its rotunda honors Jackie Robinson."},
+ {n:"Unisphere, Flushing Meadows",la:40.74615,lo:-73.84495,f:"The 12-story steel globe from the 1964 World's Fair."},
+ {n:"JFK Airport",la:40.64131,lo:-73.77814,f:"Originally called Idlewild Airport."},
+ {n:"LaGuardia Airport",la:40.7769,lo:-73.874,f:"Named for NYC's beloved Depression-era mayor."},
+ {n:"Pepsi-Cola Sign, Long Island City",la:40.7477,lo:-73.9582,f:"A 1940 neon landmark facing Manhattan across the East River."},
+ {n:"Yankee Stadium",la:40.82962,lo:-73.92625,f:"'The House That Ruth Built' — well, its 2009 successor."},
+ {n:"Bronx Zoo",la:40.85063,lo:-73.877,f:"One of the largest metropolitan zoos in the world."},
+ {n:"New York Botanical Garden",la:40.86255,lo:-73.88055,f:"250 acres including 50 acres of old-growth forest."},
+ {n:"Arthur Avenue",la:40.85477,lo:-73.88827,s:1,f:"The 'real Little Italy' of New York, in the Belmont Bronx."},
+ {n:"George Washington Bridge",la:40.85177,lo:-73.95222,f:"The world's busiest motor-vehicle bridge."},
+ {n:"St. George Terminal, Staten Island",la:40.64363,lo:-74.07351,f:"Where the free ferry lands — steps from the SI Yankees' ballpark."},
+ {n:"Snug Harbor Cultural Center",la:40.6432,lo:-74.1029,f:"A former home for retired sailors, now Staten Island's cultural hub."}
+];
+
+// ---------- Utilities ----------
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;}}
+function todayKey(){const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
+function pickRounds(seed){
+  const rand=mulberry32(seed), idx=[...LANDMARKS.keys()];
+  for(let i=idx.length-1;i>0;i--){const j=Math.floor(rand()*(i+1));[idx[i],idx[j]]=[idx[j],idx[i]];}
+  return idx.slice(0,5).map(i=>LANDMARKS[i]);
+}
+function dailySeed(){const [y,m,d]=todayKey().split("-").map(Number);return y*10000+m*100+d;}
+function scoreFor(m){return m<=75?1000:Math.max(0,Math.round(1000*Math.exp(-(m-75)/1500)));}
+function fmtDist(m){return m<1000?Math.round(m)+" m":(m/1000).toFixed(2)+" km";}
+function emojiFor(p){return p>=900?"🟩":p>=600?"🟨":p>=250?"🟧":"🟥";}
+const LS={get(k,d){try{return JSON.parse(localStorage.getItem("nylg_"+k))??d}catch(e){return d}},set(k,v){localStorage.setItem("nylg_"+k,JSON.stringify(v))}};
+
+// ---------- State ----------
+let map, guessMarker=null, actualMarker=null, line=null;
+let rounds=[], cur=0, total=0, results=[], mode="daily", locked=false;
+
+// ---------- Map ----------
+const NYC_BOUNDS=L.latLngBounds([40.48,-74.28],[40.95,-73.62]);
+function initMap(){
+  map=L.map("map",{center:[40.72,-73.95],zoom:11,minZoom:10,maxZoom:16,maxBounds:NYC_BOUNDS.pad(0.15),zoomControl:true,attributionControl:true});
+  L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}{r}.png",{
+    attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
+    subdomains:"abcd",maxZoom:19
+  }).addTo(map);
+  map.on("click",e=>{
+    if(locked)return;
+    if(!guessMarker){guessMarker=L.marker(e.latlng,{draggable:true}).addTo(map);}
+    else guessMarker.setLatLng(e.latlng);
+    const b=document.getElementById("confirmBtn");
+    b.disabled=false; b.textContent="Confirm guess";
+  });
+}
+
+// ---------- Flow ----------
+function show(id){["intro","game","end"].forEach(s=>document.getElementById(s).classList.toggle("hidden",s!==id));}
+function startGame(m){
+  mode=m; cur=0; total=0; results=[]; locked=false;
+  rounds=pickRounds(m==="daily"?dailySeed():Math.floor(Math.random()*1e9));
+  show("game");
+  if(!map){initMap();}
+  setTimeout(()=>map.invalidateSize(),50);
+  renderRound();
+}
+function renderRound(){
+  const t=rounds[cur]; locked=false;
+  clearLayers();
+  document.getElementById("panel").classList.remove("show");
+  const cb=document.getElementById("confirmBtn");
+  cb.disabled=true; cb.textContent="Tap the map to place your pin";
+  document.getElementById("actionbar").classList.remove("hidden");
+  setTimeout(()=>map.invalidateSize(),0);
+  document.getElementById("roundLbl").textContent=`Round ${cur+1} of 5 — find:`;
+  document.getElementById("targetName").innerHTML=t.n+(t.s?'<span class="badge">🍴 local spot</span>':"");
+  document.getElementById("score").textContent=total;
+  const dots=document.getElementById("dots"); dots.innerHTML="";
+  for(let i=0;i<5;i++){const d=document.createElement("div");d.className="dot";
+    if(i<results.length){const p=results[i].pts;d.classList.add(p>=900?"g1":p>=600?"g2":p>=250?"g3":"g4");}
+    else if(i===cur)d.classList.add("cur");
+    dots.appendChild(d);}
+  map.setView([40.72,-73.95],11);
+}
+function clearLayers(){[guessMarker,actualMarker,line].forEach(l=>{if(l)map.removeLayer(l);});guessMarker=actualMarker=line=null;}
+function confirmGuess(){
+  if(!guessMarker||locked)return;
+  locked=true;
+  const t=rounds[cur], g=guessMarker.getLatLng(), a=L.latLng(t.la,t.lo);
+  guessMarker.dragging.disable();
+  const d=map.distance(g,a), pts=scoreFor(d);
+  total+=pts; results.push({name:t.n,dist:d,pts});
+  actualMarker=L.marker(a).addTo(map).bindPopup("<b>"+t.n+"</b>").openPopup();
+  line=L.polyline([g,a],{color:"#ff5a5f",dashArray:"6 8",weight:3}).addTo(map);
+  document.getElementById("actionbar").classList.add("hidden");
+  map.invalidateSize();
+  map.fitBounds(L.latLngBounds([g,a]).pad(0.35));
+  document.getElementById("pDist").textContent=fmtDist(d);
+  document.getElementById("pPts").textContent="+"+pts;
+  document.getElementById("pFact").textContent=t.f||"";
+  document.getElementById("nextBtn").textContent=cur===4?"See results":"Next round";
+  document.getElementById("score").textContent=total;
+  document.getElementById("panel").classList.add("show");
+}
+function next(){
+  cur++;
+  if(cur<5){renderRound();}
+  else finish();
+}
+function finish(){
+  document.getElementById("panel").classList.remove("show");
+  if(mode==="daily"){
+    const today=todayKey(), last=LS.get("lastDay",null);
+    if(last!==today){
+      const yest=new Date(Date.now()-864e5), yKey=yest.getFullYear()+"-"+String(yest.getMonth()+1).padStart(2,"0")+"-"+String(yest.getDate()).padStart(2,"0");
+      LS.set("streak", last===yKey ? LS.get("streak",0)+1 : 1);
+      LS.set("lastDay",today);
+    }
+    LS.set("result_"+today,{total,results});
+  }
+  showEnd({total,results});
+}
+function showEnd(r){
+  show("end");
+  document.getElementById("streak").textContent=LS.get("streak",0);
+  document.getElementById("finalScore").textContent=r.total;
+  document.getElementById("endEmoji").textContent=r.total>=4500?"🏆":r.total>=3500?"🎉":r.total>=2000?"👏":"🗺️";
+  document.getElementById("endSub").textContent=(mode==="daily"?"Daily game · ":"Practice · ")+"out of 5000";
+  const el=document.getElementById("endList"); el.innerHTML="";
+  r.results.forEach(x=>{
+    const row=document.createElement("div"); row.className="endrow";
+    row.innerHTML=`<span>${emojiFor(x.pts)} ${x.name}</span><span class="pts">${x.pts}</span>`;
+    el.appendChild(row);
+  });
+}
+function share(){
+  const r=results.length?{total,results}:LS.get("result_"+todayKey(),null);
+  if(!r)return;
+  const txt=`🗽 NYC Landmark Game ${todayKey()}\n${r.results.map(x=>emojiFor(x.pts)).join("")} ${r.total}/5000${LS.get("streak",0)>1?`\n🔥 ${LS.get("streak",0)}-day streak`:""}`;
+  (navigator.clipboard?navigator.clipboard.writeText(txt):Promise.reject()).then(()=>{
+    const t=document.getElementById("toast"); t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),1800);
+  }).catch(()=>prompt("Copy your result:",txt));
+}
+
+// ---------- Wire-up ----------
+document.getElementById("playBtn").onclick=()=>{
+  const done=LS.get("result_"+todayKey(),null);
+  if(done){mode="daily";results=done.results;total=done.total;showEnd(done);}
+  else startGame("daily");
+};
+document.getElementById("practiceBtn").onclick=()=>startGame("practice");
+document.getElementById("againBtn").onclick=()=>startGame("practice");
+document.getElementById("confirmBtn").onclick=confirmGuess;
+document.getElementById("nextBtn").onclick=next;
+document.getElementById("shareBtn").onclick=share;
+document.getElementById("helpBtn").onclick=()=>document.getElementById("helpModal").classList.remove("hidden");
+document.getElementById("streak").textContent=LS.get("streak",0);
+if(LS.get("result_"+todayKey(),null))document.getElementById("playBtn").textContent="See today's result";
+</script>
+</body>
+</html>
